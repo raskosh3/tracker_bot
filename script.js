@@ -1,10 +1,68 @@
+// Инициализация Telegram WebApp БЕЗОПАСНО
+function initTelegramWebApp() {
+    // Проверяем несколькими способами
+    let tg = null;
+    
+    if (typeof window !== 'undefined') {
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
+            console.log('Telegram WebApp найден');
+        } else if (window.TelegramWebApp) {
+            tg = window.TelegramWebApp;
+            console.log('Telegram WebApp найден (старый формат)');
+        }
+    }
+    
+    if (tg) {
+        try {
+            tg.expand();
+            tg.ready();
+            
+            // Настраиваем кнопку назад если доступна
+            if (tg.BackButton) {
+                tg.BackButton.onClick(() => {
+                    tg.close();
+                });
+                tg.BackButton.show();
+            }
+            
+            console.log('Telegram WebApp инициализирован');
+        } catch (e) {
+            console.log('Ошибка инициализации Telegram WebApp:', e);
+        }
+    } else {
+        console.log('Telegram WebApp не найден - режим разработки');
+        
+        // Создаем заглушку для разработки
+        tg = {
+            expand: () => console.log('WebApp расширен (заглушка)'),
+            ready: () => console.log('WebApp готов (заглушка)'),
+            sendData: (data) => console.log('Данные отправлены:', data),
+            close: () => console.log('WebApp закрыт (заглушка)'),
+            initData: '',
+            initDataUnsafe: {},
+            themeParams: {
+                bg_color: '#ffffff',
+                text_color: '#000000'
+            }
+        };
+    }
+    
+    return tg;
+}
+
+// Основной класс трекера
 class HabitTracker {
     constructor() {
+        // Инициализируем Telegram WebApp ПЕРВЫМ ДЕЛОМ
+        this.tg = initTelegramWebApp();
+        
+        // Затем всё остальное
         this.habits = JSON.parse(localStorage.getItem('habits')) || [];
         this.currentDate = new Date();
         this.currentMonth = this.currentDate.getMonth();
         this.currentYear = this.currentDate.getFullYear();
-
+        
         this.init();
     }
 
@@ -13,21 +71,6 @@ class HabitTracker {
         this.renderCalendar();
         this.setupEventListeners();
         this.updateStats();
-
-        // Загрузка данных из Telegram WebApp
-        if (window.Telegram.WebApp) {
-            this.setupTelegramIntegration();
-        }
-    }
-
-    setupTelegramIntegration() {
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
-
-        // Установка цвета темы Telegram
-        document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#667eea');
-        document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#ffffff');
     }
 
     addHabit(name, color = '#4CAF50') {
@@ -40,7 +83,7 @@ class HabitTracker {
             streak: 0,
             createdAt: new Date().toISOString()
         };
-
+        
         this.habits.push(habit);
         this.saveHabits();
         this.renderHabits();
@@ -62,13 +105,21 @@ class HabitTracker {
         this.renderHabits();
         this.renderCalendar();
         this.updateStats();
+        
+        // Отправляем данные в Telegram бота
+        this.sendToTelegram({
+            action: 'toggle_habit',
+            habitId: habitId,
+            date: dateString,
+            completed: habit.history[dateString]
+        });
     }
 
     updateHabitProgress(habit) {
-        const totalDays = 30; // За последние 30 дней
+        const totalDays = 30;
         const completedDays = Object.keys(habit.history).length;
         habit.progress = Math.round((completedDays / totalDays) * 100);
-
+        
         // Обновляем серию выполнения
         this.updateStreak(habit);
     }
@@ -77,8 +128,7 @@ class HabitTracker {
         const dates = Object.keys(habit.history).sort();
         let streak = 0;
         let currentDate = new Date();
-
-        // Проверяем последовательные дни
+        
         for (let i = 0; i < 365; i++) {
             const dateStr = this.formatDate(currentDate);
             if (habit.history[dateStr]) {
@@ -88,7 +138,7 @@ class HabitTracker {
                 break;
             }
         }
-
+        
         habit.streak = streak;
     }
 
@@ -104,8 +154,20 @@ class HabitTracker {
         localStorage.setItem('habits', JSON.stringify(this.habits));
     }
 
+    sendToTelegram(data) {
+        if (this.tg && this.tg.sendData) {
+            try {
+                this.tg.sendData(JSON.stringify(data));
+            } catch (e) {
+                console.log('Не удалось отправить данные в Telegram:', e);
+            }
+        }
+    }
+
     renderHabits() {
         const habitsList = document.getElementById('habitsList');
+        if (!habitsList) return;
+        
         habitsList.innerHTML = '';
 
         this.habits.forEach(habit => {
@@ -116,12 +178,12 @@ class HabitTracker {
             habitElement.innerHTML = `
                 <div class="habit-header">
                     <div class="habit-title">
-                        <i class="fas fa-bullseye"></i>
+                        <span class="icon-fallback">🎯</span>
                         ${habit.name}
                     </div>
                     <div class="habit-actions">
                         <button class="btn-icon" onclick="tracker.deleteHabit(${habit.id})">
-                            <i class="fas fa-trash"></i>
+                            <span class="icon-fallback">🗑</span>
                         </button>
                     </div>
                 </div>
@@ -147,24 +209,24 @@ class HabitTracker {
     generateWeekDays(habit) {
         let html = '';
         const today = new Date();
-
+        
         for (let i = 6; i >= 0; i--) {
             const date = new Date(today);
             date.setDate(today.getDate() - i);
             const dateStr = this.formatDate(date);
             const isCompleted = habit.history[dateStr];
             const dayName = this.getDayName(date.getDay());
-
+            
             html += `
-                <div class="day ${isCompleted ? 'completed' : ''}"
+                <div class="day ${isCompleted ? 'completed' : ''}" 
                      data-date="${dateStr}"
                      data-habit="${habit.id}"
                      style="${isCompleted ? `background: ${habit.color}` : ''}">
-                    ${dayName}<br>${date.getDate()}
+                    ${dayName}<br><small>${date.getDate()}</small>
                 </div>
             `;
         }
-
+        
         return html;
     }
 
@@ -183,16 +245,15 @@ class HabitTracker {
     renderCalendar() {
         const calendar = document.getElementById('calendar');
         const monthYear = document.getElementById('currentMonth');
+        
+        if (!calendar || !monthYear) return;
 
-        // Установка названия месяца
         const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
         monthYear.textContent = `${monthNames[this.currentMonth]} ${this.currentYear}`;
 
-        // Генерация календаря
         calendar.innerHTML = '';
-
-        // Заголовки дней недели
+        
         const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
         dayNames.forEach(day => {
             const dayElement = document.createElement('div');
@@ -201,49 +262,43 @@ class HabitTracker {
             calendar.appendChild(dayElement);
         });
 
-        // Получаем первый день месяца
         const firstDay = new Date(this.currentYear, this.currentMonth, 1);
         const startingDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-
-        // Пустые ячейки в начале
+        
         for (let i = 0; i < startingDay; i++) {
             const emptyDay = document.createElement('div');
             emptyDay.className = 'day empty';
             calendar.appendChild(emptyDay);
         }
 
-        // Дни месяца
         const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
-
+        
         for (let day = 1; day <= daysInMonth; day++) {
             const dayElement = document.createElement('div');
             dayElement.className = 'day';
             dayElement.textContent = day;
-
+            
             const dateStr = this.formatDate(new Date(this.currentYear, this.currentMonth, day));
-
-            // Проверяем выполнение привычек в этот день
+            
             const habitsForDay = this.habits.filter(habit => habit.history[dateStr]);
             if (habitsForDay.length > 0) {
                 dayElement.classList.add('completed');
-
-                // Градиент для нескольких привычек
+                
                 if (habitsForDay.length > 1) {
                     const gradient = habitsForDay.map((habit, index) => {
                         const position = (index / habitsForDay.length) * 100;
                         const nextPosition = ((index + 1) / habitsForDay.length) * 100;
                         return `${habit.color} ${position}% ${nextPosition}%`;
                     }).join(', ');
-
+                    
                     dayElement.style.background = `linear-gradient(135deg, ${gradient})`;
                 } else {
                     dayElement.style.background = habitsForDay[0].color;
                 }
             }
-
-            // Добавляем статистику при наведении
+            
             dayElement.title = `Выполнено привычек: ${habitsForDay.length}`;
-
+            
             calendar.appendChild(dayElement);
         }
     }
@@ -262,13 +317,20 @@ class HabitTracker {
 
         const completionRate = totalHabits > 0 ? Math.round(totalCompleted / totalHabits) : 0;
 
-        document.getElementById('current-streak').textContent = currentStreak;
-        document.getElementById('completion-rate').textContent = `${completionRate}%`;
-        document.getElementById('total-done').textContent = totalDone;
+        const currentStreakEl = document.getElementById('current-streak');
+        const completionRateEl = document.getElementById('completion-rate');
+        const totalDoneEl = document.getElementById('total-done');
+        
+        if (currentStreakEl) currentStreakEl.textContent = currentStreak;
+        if (completionRateEl) completionRateEl.textContent = `${completionRate}%`;
+        if (totalDoneEl) totalDoneEl.textContent = totalDone;
     }
 
     formatDate(date) {
-        return date.toISOString().split('T')[0];
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
 
     getDayName(dayIndex) {
@@ -278,9 +340,11 @@ class HabitTracker {
 
     showNotification(message) {
         const notification = document.getElementById('notification');
+        if (!notification) return;
+        
         notification.textContent = message;
         notification.classList.add('show');
-
+        
         setTimeout(() => {
             notification.classList.remove('show');
         }, 3000);
@@ -288,26 +352,38 @@ class HabitTracker {
 
     setupEventListeners() {
         // Кнопка добавления привычки
-        document.getElementById('addHabitBtn').addEventListener('click', () => {
-            document.getElementById('habitModal').style.display = 'flex';
-        });
+        const addHabitBtn = document.getElementById('addHabitBtn');
+        if (addHabitBtn) {
+            addHabitBtn.addEventListener('click', () => {
+                document.getElementById('habitModal').style.display = 'flex';
+            });
+        }
 
         // Кнопка сохранения привычки
-        document.getElementById('saveHabitBtn').addEventListener('click', () => {
-            const name = document.getElementById('habitName').value.trim();
-            const selectedColor = document.querySelector('.color-option.active')?.dataset.color || '#4CAF50';
-
-            if (name) {
-                this.addHabit(name, selectedColor);
-                document.getElementById('habitModal').style.display = 'none';
-                document.getElementById('habitName').value = '';
-            }
-        });
+        const saveHabitBtn = document.getElementById('saveHabitBtn');
+        if (saveHabitBtn) {
+            saveHabitBtn.addEventListener('click', () => {
+                const nameInput = document.getElementById('habitName');
+                if (!nameInput) return;
+                
+                const name = nameInput.value.trim();
+                const selectedColor = document.querySelector('.color-option.active')?.dataset.color || '#4CAF50';
+                
+                if (name) {
+                    this.addHabit(name, selectedColor);
+                    document.getElementById('habitModal').style.display = 'none';
+                    nameInput.value = '';
+                }
+            });
+        }
 
         // Кнопка отмены
-        document.getElementById('cancelBtn').addEventListener('click', () => {
-            document.getElementById('habitModal').style.display = 'none';
-        });
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                document.getElementById('habitModal').style.display = 'none';
+            });
+        }
 
         // Выбор цвета
         document.querySelectorAll('.color-option').forEach(option => {
@@ -320,40 +396,36 @@ class HabitTracker {
         });
 
         // Навигация по месяцам
-        document.getElementById('prevMonth').addEventListener('click', () => {
-            this.currentMonth--;
-            if (this.currentMonth < 0) {
-                this.currentMonth = 11;
-                this.currentYear--;
-            }
-            this.renderCalendar();
-        });
+        const prevMonthBtn = document.getElementById('prevMonth');
+        const nextMonthBtn = document.getElementById('nextMonth');
+        
+        if (prevMonthBtn) {
+            prevMonthBtn.addEventListener('click', () => {
+                this.currentMonth--;
+                if (this.currentMonth < 0) {
+                    this.currentMonth = 11;
+                    this.currentYear--;
+                }
+                this.renderCalendar();
+            });
+        }
+        
+        if (nextMonthBtn) {
+            nextMonthBtn.addEventListener('click', () => {
+                this.currentMonth++;
+                if (this.currentMonth > 11) {
+                    this.currentMonth = 0;
+                    this.currentYear++;
+                }
+                this.renderCalendar();
+            });
+        }
 
-        document.getElementById('nextMonth').addEventListener('click', () => {
-            this.currentMonth++;
-            if (this.currentMonth > 11) {
-                this.currentMonth = 0;
-                this.currentYear++;
-            }
-            this.renderCalendar();
-        });
-
-        // Закрытие модального окна при клике вне его
+        // Закрытие модального окна
         window.addEventListener('click', (e) => {
             const modal = document.getElementById('habitModal');
             if (e.target === modal) {
                 modal.style.display = 'none';
-            }
-        });
-
-        // Горячие клавиши
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                document.getElementById('habitModal').style.display = 'none';
-            }
-            if (e.ctrlKey && e.key === 'n') {
-                e.preventDefault();
-                document.getElementById('habitModal').style.display = 'flex';
             }
         });
     }
@@ -362,13 +434,36 @@ class HabitTracker {
 // Инициализация при загрузке
 let tracker;
 document.addEventListener('DOMContentLoaded', () => {
-    tracker = new HabitTracker();
-
-    // Добавляем несколько тестовых привычек при первом запуске
-    if (!localStorage.getItem('habits')) {
-        tracker.addHabit('Пить воду', '#2196F3');
-        tracker.addHabit('Зарядка', '#4CAF50');
-        tracker.addHabit('Чтение', '#FF9800');
+    console.log('DOM загружен, инициализируем трекер...');
+    
+    try {
+        tracker = new HabitTracker();
+        window.tracker = tracker;
+        
+        // Добавляем несколько тестовых привычек при первом запуске
+        if (!localStorage.getItem('habits')) {
+            tracker.addHabit('Пить воду', '#2196F3');
+            tracker.addHabit('Зарядка', '#4CAF50');
+            tracker.addHabit('Чтение', '#FF9800');
+        }
+        
+        console.log('Трекер успешно инициализирован');
+    } catch (error) {
+        console.error('Ошибка инициализации трекера:', error);
+        
+        // Аварийный режим
+        const container = document.querySelector('.container');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <h2>😕 Что-то пошло не так</h2>
+                    <p>Попробуйте обновить страницу или перезапустить Telegram.</p>
+                    <button onclick="location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 10px; margin-top: 20px;">
+                        Обновить
+                    </button>
+                </div>
+            `;
+        }
     }
 });
 
