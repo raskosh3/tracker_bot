@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Трекер Привычек</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Шапка с статистикой -->
+        <header class="header">
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="current-streak">0</span>
+                    <span class="stat-label">🔥 Дней подряд</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="completion-rate">0%</span>
+                    <span class="stat-label">📈 Выполнено</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="total-done">0</span>
+                    <span class="stat-label">✅ Всего</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Основной контейнер привычек -->
+        <main class="habits-container">
+            <div class="habits-header">
+                <h1><i class="fas fa-chart-line"></i> Мои Привычки</h1>
+                <button class="btn-add" id="addHabitBtn">
+                    <i class="fas fa-plus"></i> Добавить
+                </button>
+            </div>
+
+            <!-- Список привычек будет генерироваться JS -->
+            <div class="habits-list" id="habitsList">
+                <!-- Сюда динамически добавляются привычки -->
+            </div>
+
+            <!-- Календарь -->
+            <div class="calendar-section">
+                <div class="calendar-header">
+                    <h2><i class="far fa-calendar-alt"></i> Календарь</h2>
+                    <div class="month-navigation">
+                        <button id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+                        <span id="currentMonth">Июль 2024</span>
+                        <button id="nextMonth"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="calendar" id="calendar">
+                    <!-- Календарь генерируется JS -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Модальное окно для добавления привычки -->
+        <div class="modal" id="habitModal">
+            <div class="modal-content">
+                <h3><i class="fas fa-magic"></i> Новая Привычка</h3>
+                <input type="text" id="habitName" placeholder="Например: Пить 2 литра воды">
+                <div class="color-picker">
+                    <span>Цвет:</span>
+                    <div class="colors">
+                        <div class="color-option" style="background-color: #4CAF50;" data-color="#4CAF50"></div>
+                        <div class="color-option" style="background-color: #2196F3;" data-color="#2196F3"></div>
+                        <div class="color-option" style="background-color: #FF9800;" data-color="#FF9800"></div>
+                        <div class="color-option" style="background-color: #9C27B0;" data-color="#9C27B0"></div>
+                        <div class="color-option" style="background-color: #F44336;" data-color="#F44336"></div>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn-cancel" id="cancelBtn">Отмена</button>
+                    <button class="btn-save" id="saveHabitBtn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Уведомления -->
+        <div class="notification" id="notification"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
